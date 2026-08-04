@@ -1,0 +1,11 @@
+# Kconfig
+
+mainmenu "Define amount of connected devices to 1wire"
+
+config COUNT_CONNECTED_DEVICES
+	int "Amount of connected devices to the 1wire"
+	default 0
+	help
+	  This sets the amount of connected devices to the one wire UART.
+	  
+source "Kconfig.zephyr"
