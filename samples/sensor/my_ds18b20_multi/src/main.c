@@ -55,10 +55,10 @@ int main(void)
 
 	printk("Total devices found: %d\n", n);
 
-	if (ctx.count < 2) {
-		printk("Expected 2 sensors, found %d\n", (int)ctx.count);
-		return 0;
-	}
+	// if (ctx.count < 2) {
+	// 	printk("Expected 2 sensors, found %d\n", (int)ctx.count);
+	// 	return 0;
+	// }
 
 	/* Assign discovered ROMs to the two sensor devices */
 	set_rom(a, ctx.roms[0]);
