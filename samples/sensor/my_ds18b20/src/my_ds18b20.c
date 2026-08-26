@@ -38,13 +38,12 @@ LOG_MODULE_REGISTER(MY_DS18B20, CONFIG_SENSOR_LOG_LEVEL);
  * If TESTS_INCLUDED equals 1 code includes tests, else it does not
  */
 
-#define TESTS_INCLUDED 0
-
+#define TESTS_INCLUDED 1
 /*
  * If TEST_MODE equals 1 it's a time test, if equals 0 it's a CPU LOAD test
  */
 
-#define TEST_MODE 0
+#define TEST_MODE 1
 
 #if (TESTS_INCLUDED)
 #if (TEST_MODE)
@@ -70,6 +69,7 @@ void ds18b20_test_gpio_pins_setup(void)
 static int load;
 #endif
 #endif
+
 
 enum chip_type {type_ds18b20, type_ds18s20};
 

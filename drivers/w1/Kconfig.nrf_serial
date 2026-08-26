@@ -1,0 +1,31 @@
+# Configuration options for the NRF serial 1-Wire Master driver
+
+# Copyright (c) 2026, Nordic Semiconductor ASA 
+# SPDX-License-Identifier: Apache-2.0
+
+config W1_NRF_SERIAL
+	bool "1-wire Serial"
+	select SERIAL
+	default y
+	depends on DT_HAS_NRF_W1_SERIAL_ENABLED
+	select UART_USE_RUNTIME_CONFIGURE
+    select NRFX_UARTE
+	help
+	  This option enables the NRF serial 1-Wire master driver.
+
+	  The bus reset, and bit read and write operations are executed
+	  via bytes read and write operations on top of the NRF
+	  serial driver interface.
+
+if W1_NRF_SERIAL
+
+config NRF_W1_SERIAL_BIT_TIMEOUT
+	int "Bit read timeout in us"
+	default 380
+	help
+	  The bit read timeout specifies how long the driver tries to read the
+	  uart byte (1-wire standard speed data bit).
+	  For serial drivers where poll_out does not block until the transfer is
+	  complete, it must at least be greater than 87us (10bits / 115.2 kBd).
+
+endif # W1_NRF_SERIAL

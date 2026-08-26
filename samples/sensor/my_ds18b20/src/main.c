@@ -15,7 +15,7 @@
  * If TESTS_INCLUDED equals 1 code includes tests, else it does not
  */
 
-#define TESTS_INCLUDED 0
+#define TESTS_INCLUDED 1
 
 void w1_test_gpio_pins_setup(void);
 

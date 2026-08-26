@@ -17,6 +17,8 @@
 #include <zephyr/drivers/w1.h>
 
 #include <hal/nrf_gpio.h>
+#include <zephyr/debug/cpu_load.h>
+
 
 LOG_MODULE_REGISTER(w1, CONFIG_W1_LOG_LEVEL);
 
@@ -25,10 +27,10 @@ LOG_MODULE_REGISTER(w1, CONFIG_W1_LOG_LEVEL);
 #define W1_SEARCH_NO_SLAVE	   66
 
 /*
- * If TEST_MODE equals 1 it's a time test, if equals 0 it's a CPU LOAD test
+ * If TEST_MODE equals 1 it's a time test, if equals 0 tests are turned off
  */
 
-#define TEST_MODE 0
+#define TEST_MODE 1
 
 #if (TEST_MODE)
 #define PIN1_11 NRF_GPIO_PIN_MAP(1, 11)

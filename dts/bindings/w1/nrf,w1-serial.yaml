@@ -1,0 +1,64 @@
+# Copyright (c) 2026, Nordic Semiconductor ASA
+# SPDX-License-Identifier: Apache-2.0
+
+# Properties for the serial 1-Wire master driver:
+# No GPIOs need to be configured here, as this is already done in the serial
+# driver. Typically 2 IOs are needed, but some microcontrollers have
+# the option for a "single-wire Half-duplex" mode, where the TX and RX lines
+# are internally connected, such that only a single IO
+# needs to be allocated for the 1-Wire communication.
+
+description: 1-Wire master over NRF uart
+
+compatible: "nrf,w1-serial"
+
+include: [pinctrl-device.yaml, w1-master.yaml]
+
+properties:
+  endtx-stoptx-supported:
+    type: boolean
+    description: |
+      UARTE has ENDTX_STOPTX HW short.
+  frame-timeout-supported:
+    type: boolean
+    description: |
+      UARTE has RX frame timeout HW feature.
+  overdrive-data-baud:
+    type: int
+    default: 1000000
+    description: |
+      Baud rate for overdrive speed data communication. The default value of
+      1000000 provides timing of t_low1=1.0us, t_low0=9.0us, t_slot=10.0us.
+
+  overdrive-reset-baud:
+    type: int
+    default: 115200
+    description: |
+      Baud rate for overdrive speed reset/presence detection. The default value
+      of 115200 provides timing of t_RSTL=52.1us, t_slot=86.8us.
+
+examples:
+  - |
+    /* Basic Example */
+    &uart1 {
+        compatible = "nrf,w1-serial";
+        status = "okay";
+        pinctrl-0 = <&uart1_default>;
+        pinctrl-1 = <&uart1_sleep>;
+        pinctrl-names = "default", "sleep";
+        #address-cells = <1>;
+        #size-cells = <0>;
+    };
+  - |
+    /* Custom Overdrive settings Example */
+    &uart1 {
+        compatible = "nrf,w1-serial";
+        status = "okay";
+        pinctrl-0 = <&uart1_default>;
+        pinctrl-1 = <&uart1_sleep>;
+        pinctrl-names = "default", "sleep";
+        #address-cells = <1>;
+        #size-cells = <0>;
+        overdrive-data-baud = <921600>;
+        overdrive-reset-baud = <115200>;
+    };

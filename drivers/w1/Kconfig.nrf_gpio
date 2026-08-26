@@ -1,6 +1,6 @@
 # Configuration options for the nrf GPIO 1-Wire Master driver
 
-# Copyright (c) 2023 Hudson C. Dalpra
+# Copyright (c) 2026, Nordic Semiconductor ASA 
 # SPDX-License-Identifier: Apache-2.0
 
 config W1_NRF_GPIO
