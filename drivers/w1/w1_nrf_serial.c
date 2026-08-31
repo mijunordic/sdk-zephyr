@@ -36,7 +36,7 @@ LOG_MODULE_REGISTER(nrf_w1_serial, CONFIG_W1_LOG_LEVEL);
 #define W1_SERIAL_BIT_1         0xFF
 #define W1_SERIAL_BIT_0         0x00
 
-#define CONFIG_W1_NRF_SERIAL_TIME_CRITICAL 0
+#define CONFIG_W1_NRF_SERIAL_TIME_CRITICAL 1
 
 
 #define W1_SERIAL_STD_RESET_BYTE 0xF0
@@ -47,7 +47,7 @@ LOG_MODULE_REGISTER(nrf_w1_serial, CONFIG_W1_LOG_LEVEL);
  */
 #define W1_SERIAL_OD_RESET_BYTE 0xE0
 
-#define TIME_CRITICAL 0
+#define TIME_CRITICAL 1
 
 struct w1_serial_config {
 	/** w1 master config, common to all drivers */
@@ -72,6 +72,24 @@ struct w1_serial_data {
     uint8_t rx_byte;
 };
 
+static int w1_blocking_tx(NRF_UARTE_Type *p_uarte, uint8_t const *p_buffer,
+				 size_t length, k_timepoint_t end)
+{
+    nrfy_uarte_event_clear(p_uarte, NRF_UARTE_EVENT_ENDTX);
+    nrfy_uarte_event_clear(p_uarte, NRF_UARTE_EVENT_TXSTOPPED);
+    nrfy_uarte_tx_buffer_set(p_uarte, p_buffer, length);
+    nrfy_uarte_task_trigger(p_uarte, NRF_UARTE_TASK_STARTTX);
+
+    while (!nrfy_uarte_event_check(p_uarte, NRF_UARTE_EVENT_ENDTX)) {
+        if (sys_timepoint_expired(end)) {
+            nrfy_uarte_task_trigger(p_uarte, NRF_UARTE_TASK_STOPTX);
+            return -ETIMEDOUT;
+        }
+    }
+    return 0;
+}
+
+
 /*
  * Concurrently transmits and receives one 1-Wire bit
  * by sending and receiving one uart byte
@@ -80,91 +98,61 @@ static int serial_tx_rx(const struct device *dev, const uint8_t *tx_data, uint8_
 			size_t len, uint32_t timeout)
 {
     struct w1_serial_data * data = dev->data;
-    // nrf_gpio_cfg_output(PIN1_24);
+    int ret;
 
     #if (CONFIG_W1_NRF_SERIAL_TIME_CRITICAL)
-    int ret = 0;
     k_timepoint_t end;
     #endif
 
 	__ASSERT_NO_MSG(tx_data != NULL);
 	__ASSERT_NO_MSG(rx_data != NULL);
 
-    #if (CONFIG_W1_NRF_SERIAL_TIME_CRITICAL)
-    ret = nrfx_uarte_rx_buffer_set(&data->inst, &data->rx_byte, 1);
-
+    ret = nrfx_uarte_rx_buffer_set(&data->inst, rx_data, len);
     if (ret != 0) {
-        LOG_ERR("Failed to set rx buffer");
+        LOG_ERR("Failed to arm rx buffer");
         return -EIO;
     }
 
     ret = nrfx_uarte_rx_enable(&data->inst, 0);
-
     if (ret != 0 && ret != -EBUSY) {
         LOG_ERR("Failed to enable uarte RX");
         return -EIO;
     }
-    #endif
 
-    for (int i = 0; i < len; i++)
-    {
-        #if (CONFIG_W1_NRF_SERIAL_TIME_CRITICAL)
-        ret = nrfx_uarte_tx(&data->inst, &tx_data[i], 0x1, NRFX_UARTE_TX_BLOCKING);
+    #if (CONFIG_W1_NRF_SERIAL_TIME_CRITICAL)
+    end = sys_timepoint_calc(K_USEC((uint64_t)timeout * len));
 
-        if (ret != 0){
-            (void)nrfx_uarte_rx_abort(&data->inst, true, true);
-            LOG_ERR("Failed to send data");
-            return -EIO;
-        }
+    ret = w1_blocking_tx(data->inst.p_reg, tx_data, len, end);
 
-        end = sys_timepoint_calc(K_USEC(timeout));
-
-        do {
-            ret = nrfx_uarte_rx_ready(&data->inst, NULL);
-        }
-        while(ret != 0 && !sys_timepoint_expired(end));
-
-        if (ret != 0){
-            (void)nrfx_uarte_rx_abort(&data->inst, true, true);
-            LOG_ERR("Failed to receive data");
-            return -EIO;
-        }
-
-        rx_data[i] = data->rx_byte;
-
-        /*
-         * Re-arm only between bits; skip after the last one - the next
-         * serial_tx_rx() call re-arms at entry.
-         */
-
-        if (i + 1 < len) {
-            if (nrfx_uarte_rx_buffer_set(&data->inst, &data->rx_byte, 1) != 0) {
-                nrfx_uarte_rx_abort(&data->inst, true, true);
-                LOG_ERR("Failed to re-arm rx buffer");
-                return -EIO;
-            }
-        }
-        #else
-        if (nrfx_uarte_tx(&data->inst, &tx_data[i], 0x1, 0) != 0) {
-            LOG_ERR("Failed to send data");
-            return -EIO;
-        }
-
-        // if (k_sem_take(&data->tx_sem, K_USEC(timeout)) != 0)
-        // {
-        //     LOG_ERR("Failed to take tx semaphore");
-        //     return -EIO;
-        // }
-        // nrf_gpio_pin_clear(PIN1_24);
-        if (k_sem_take(&data->rx_sem, K_USEC(timeout)) != 0)
-        {
-            LOG_ERR("Failed to take rx semaphore");
-            return -EIO;
-        }
-        rx_data[i] = data->rx_byte;
-
-        #endif
+    if (ret != 0) {
+        (void)nrfx_uarte_rx_abort(&data->inst, true, true);
+        LOG_ERR("Failed to send data");
+        return -EIO;
     }
+
+    do {
+        ret = nrfx_uarte_rx_ready(&data->inst, NULL);
+    }
+    while (ret != 0 && !sys_timepoint_expired(end));
+
+    if (ret != 0) {
+        (void)nrfx_uarte_rx_abort(&data->inst, true, true);
+        LOG_ERR("Failed to receive data");
+        return -EIO;
+    }
+
+    #else
+    ret = nrfx_uarte_tx(&data->inst, tx_data, len, 0);
+    if (ret != 0) {
+        LOG_ERR("Failed to send data");
+        return -EIO;
+    }
+
+    if (k_sem_take(&data->rx_sem, K_USEC((uint64_t)timeout * len)) != 0) {
+        LOG_ERR("Failed to take rx semaphore");
+        return -EIO;
+    }
+    #endif
     return 0;
 }
 
@@ -172,7 +160,8 @@ static int serial_tx_rx(const struct device *dev, const uint8_t *tx_data, uint8_
 static int serial_tx_rx_byte(const struct device *dev, uint8_t tx_byte, uint8_t *rx_byte)
 {
 	__ASSERT_NO_MSG(rx_byte != NULL);
-	uint8_t byte_representation[8];
+	uint8_t rx_representation[8];
+	uint8_t tx_representation[8];
 
 	for (int i = 0; i < 8; ++i) {
 		/*
@@ -180,11 +169,11 @@ static int serial_tx_rx_byte(const struct device *dev, uint8_t tx_byte, uint8_t 
 		 * write Bit 1, or read low time.
 		 * Bit representations vary by speed mode.
 		 */
-		byte_representation[i] =
+		tx_representation[i] =
 			((tx_byte & (1 << i)) != 0) ? W1_SERIAL_BIT_1 : W1_SERIAL_BIT_0;
 	}
 
-	if (serial_tx_rx(dev, &byte_representation[0], &byte_representation[0], 8,
+	if (serial_tx_rx(dev, &tx_representation[0], &rx_representation[0], 8,
 			 CONFIG_NRF_W1_SERIAL_BIT_TIMEOUT) < 0) {
 		return -EIO;
 	}
@@ -195,7 +184,7 @@ static int serial_tx_rx_byte(const struct device *dev, uint8_t tx_byte, uint8_t 
 		 * rx-byte different from 0xFF indicates that a slave has
 		 * pulled line low to transmit a 0 bit, otherwise a 1 bit.
 		 */
-		*rx_byte |= (uint8_t)(byte_representation[i] == 0xFF) << i;
+		*rx_byte |= (uint8_t)(rx_representation[i] == 0xFF) << i;
 	}
 
 	return 0;
@@ -335,7 +324,7 @@ static void w1_uarte_event_handler(nrfx_uarte_event_t const *p_event, void *p_co
 
     switch (p_event->type){
         case NRFX_UARTE_EVT_TX_DONE:
-            k_sem_give(&data->tx_sem);
+            // k_sem_give(&data->tx_sem);
             break;
 
         case NRFX_UARTE_EVT_RX_DONE:
@@ -343,7 +332,7 @@ static void w1_uarte_event_handler(nrfx_uarte_event_t const *p_event, void *p_co
             break;
 
         case NRFX_UARTE_EVT_RX_BUF_REQUEST:
-            nrfx_uarte_rx_buffer_set(&data->inst, &data->rx_byte, 1);
+            // nrfx_uarte_rx_buffer_set(&data->inst, &data->rx_byte, 1);
             break;
 
         case NRFX_UARTE_EVT_ERROR:
