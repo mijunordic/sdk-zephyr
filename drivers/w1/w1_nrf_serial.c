@@ -36,7 +36,7 @@ LOG_MODULE_REGISTER(nrf_w1_serial, CONFIG_W1_LOG_LEVEL);
 #define W1_SERIAL_BIT_1         0xFF
 #define W1_SERIAL_BIT_0         0x00
 
-#define CONFIG_W1_NRF_SERIAL_TIME_CRITICAL 0
+#define CONFIG_W1_NRF_SERIAL_TIME_CRITICAL 1
 
 
 #define W1_SERIAL_STD_RESET_BYTE 0xF0
@@ -47,7 +47,7 @@ LOG_MODULE_REGISTER(nrf_w1_serial, CONFIG_W1_LOG_LEVEL);
  */
 #define W1_SERIAL_OD_RESET_BYTE 0xE0
 
-#define TIME_CRITICAL 0
+#define TIME_CRITICAL 1
 
 struct w1_serial_config {
 	/** w1 master config, common to all drivers */
@@ -70,6 +70,7 @@ struct w1_serial_data {
     struct k_sem rx_sem;
 };
 
+#if (CONFIG_W1_NRF_SERIAL_TIME_CRITICAL)
 static int w1_blocking_tx(NRF_UARTE_Type *p_uarte, uint8_t const *p_buffer,
 				 size_t length, k_timepoint_t end)
 {
@@ -86,7 +87,7 @@ static int w1_blocking_tx(NRF_UARTE_Type *p_uarte, uint8_t const *p_buffer,
     }
     return 0;
 }
-
+#endif
 
 /*
  * Concurrently transmits and receives one 1-Wire bit
