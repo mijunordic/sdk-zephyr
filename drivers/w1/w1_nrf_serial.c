@@ -36,7 +36,7 @@ LOG_MODULE_REGISTER(nrf_w1_serial, CONFIG_W1_LOG_LEVEL);
 #define W1_SERIAL_BIT_1         0xFF
 #define W1_SERIAL_BIT_0         0x00
 
-#define CONFIG_W1_NRF_SERIAL_TIME_CRITICAL 1
+#define CONFIG_W1_NRF_SERIAL_TIME_CRITICAL 0
 
 
 #define W1_SERIAL_STD_RESET_BYTE 0xF0
@@ -47,7 +47,7 @@ LOG_MODULE_REGISTER(nrf_w1_serial, CONFIG_W1_LOG_LEVEL);
  */
 #define W1_SERIAL_OD_RESET_BYTE 0xE0
 
-#define TIME_CRITICAL 1
+#define TIME_CRITICAL 0
 
 struct w1_serial_config {
 	/** w1 master config, common to all drivers */
@@ -67,9 +67,7 @@ struct w1_serial_data {
 	struct w1_master_data master_data;
 	bool overdrive_active;
     nrfx_uarte_t inst;
-    struct k_sem tx_sem;
     struct k_sem rx_sem;
-    uint8_t rx_byte;
 };
 
 static int w1_blocking_tx(NRF_UARTE_Type *p_uarte, uint8_t const *p_buffer,
@@ -324,7 +322,6 @@ static void w1_uarte_event_handler(nrfx_uarte_event_t const *p_event, void *p_co
 
     switch (p_event->type){
         case NRFX_UARTE_EVT_TX_DONE:
-            // k_sem_give(&data->tx_sem);
             break;
 
         case NRFX_UARTE_EVT_RX_DONE:
@@ -351,7 +348,6 @@ static int w1_serial_init(const struct device *dev)
     int ret = 0;
 
     #if(!CONFIG_W1_NRF_SERIAL_TIME_CRITICAL)
-    k_sem_init(&data->tx_sem, 0, 1);
     k_sem_init(&data->rx_sem, 0, 1);
     #endif
 
@@ -373,15 +369,6 @@ static int w1_serial_init(const struct device *dev)
         LOG_ERR("Failed to initialize uarte");
         return -EIO;
     }
-
-    if (nrfx_uarte_rx_buffer_set(&data->inst, &data->rx_byte, 1) != 0) {
-        LOG_ERR("Failed to set rx buffer");
-        return -EIO;
-    }
-    if (nrfx_uarte_rx_enable(&data->inst, 0) != 0) {
-        LOG_ERR("Failed to enable uarte RX");
-        return -EIO;
-    }
     #else
     if (nrfx_uarte_init(&data->inst, &config, w1_uarte_event_handler) != 0) {
         LOG_ERR("Failed to initialize uarte");
@@ -389,11 +376,6 @@ static int w1_serial_init(const struct device *dev)
     }
 
     cfg->irq_config_func();
-
-    if (nrfx_uarte_rx_enable(&data->inst, 0) != 0) {
-        LOG_ERR("Failed to enable uarte RX");
-        return -EIO;
-    }
     #endif
 
 	data->overdrive_active = false;
