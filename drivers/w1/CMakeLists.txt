@@ -18,6 +18,7 @@ zephyr_library_sources_ifdef(CONFIG_W1_MAX32 w1_max32.c)
 zephyr_library_sources_ifdef(CONFIG_W1_TEST w1_test.c)
 zephyr_library_sources_ifdef(CONFIG_W1_ZEPHYR_GPIO w1_zephyr_gpio.c)
 zephyr_library_sources_ifdef(CONFIG_W1_NRF_GPIO w1_nrf_gpio.c)
+zephyr_library_sources_ifdef(CONFIG_W1_NRF_SERIAL w1_nrf_serial.c)
 zephyr_library_sources_ifdef(CONFIG_W1_ZEPHYR_SERIAL w1_zephyr_serial.c)
 # zephyr-keep-sorted-stop
 
