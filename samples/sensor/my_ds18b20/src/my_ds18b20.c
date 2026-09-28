@@ -7,8 +7,12 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/util_macro.h>
-#include <zephyr/ztest.h>     
-LOG_MODULE_REGISTER(DS18B20, CONFIG_SENSOR_LOG_LEVEL);
+#include <zephyr/ztest.h>
+
+#include <hal/nrf_gpio.h>
+#include <zephyr/debug/cpu_load.h>
+
+LOG_MODULE_REGISTER(MY_DS18B20, CONFIG_SENSOR_LOG_LEVEL);
 
 #define DS18B20_CMD_CONVERT_T         0x44
 #define DS18B20_CMD_WRITE_SCRATCHPAD  0x4E
@@ -29,6 +33,43 @@ LOG_MODULE_REGISTER(DS18B20, CONFIG_SENSOR_LOG_LEVEL);
 
 #define DS18B20_FAMILYCODE 0x28
 #define DS18S20_FAMILYCODE 0x10
+
+/*
+ * If TESTS_INCLUDED equals 1 code includes tests, else it does not
+ */
+
+#define TESTS_INCLUDED 1
+/*
+ * If TEST_MODE equals 1 it's a time test, if equals 0 it's a CPU LOAD test
+ */
+
+#define TEST_MODE 1
+
+#if (TESTS_INCLUDED)
+#if (TEST_MODE)
+#define PIN1_14 NRF_GPIO_PIN_MAP(1, 14)
+#define PIN1_12 NRF_GPIO_PIN_MAP(1, 12)
+#define PIN3_02 NRF_GPIO_PIN_MAP(3, 2)
+#define PIN3_00 NRF_GPIO_PIN_MAP(3, 0)
+#define PIN3_06 NRF_GPIO_PIN_MAP(3, 6)
+#define PIN3_10 NRF_GPIO_PIN_MAP(3, 10)
+
+void ds18b20_test_gpio_pins_setup(void)
+{
+#if (TEST_MODE)
+	nrf_gpio_cfg_output(PIN1_12);
+	nrf_gpio_cfg_output(PIN1_14);
+	nrf_gpio_cfg_output(PIN3_02);
+	nrf_gpio_cfg_output(PIN3_00);
+	nrf_gpio_cfg_output(PIN3_06);
+	nrf_gpio_cfg_output(PIN3_10);
+#endif
+}
+#else
+static int load;
+#endif
+#endif
+
 
 enum chip_type {type_ds18b20, type_ds18s20};
 
@@ -105,6 +146,7 @@ static int ds18b20_write_scratchpad(const struct device *bus,
 									struct ds18b20_data *data,
 									struct ds18b20_scratchpad scratchpad)
 {
+
 	int ret;
 	uint8_t sp_data[4] = {
 		DS18B20_CMD_WRITE_SCRATCHPAD,
@@ -112,13 +154,49 @@ static int ds18b20_write_scratchpad(const struct device *bus,
 		scratchpad.alarm_temp_low,
 		scratchpad.config
 	};
+	#if(TESTS_INCLUDED)
+	#if(TEST_MODE)
+	nrf_gpio_pin_set(PIN1_12);
+	#else
+	printk("Inside ds18b20_write_scratchpad()\n\r");
+	(void)cpu_load_get(true);
+	#endif
+	#endif
 
 	ret = w1_write_read(bus, &data->config, sp_data, sizeof(sp_data), NULL, 0);
+
+	#if(TESTS_INCLUDED)
+	#if(TEST_MODE)
+	nrf_gpio_pin_clear(PIN1_12);
+	#else
+	load = cpu_load_get(true);
+	printk("w1_write_read in ds18b20_write_scratchpad load: %d \n\r", load);
+	#endif
+	#endif
+
 	if (ret != 0) {
 		return ret;
 	}
 
+	#if(TESTS_INCLUDED)
+	#if(TEST_MODE)
+	nrf_gpio_pin_set(PIN1_14);
+	#else
+	(void)cpu_load_get(true);
+	#endif
+	#endif
+
 	ret = ds18b20_read_scratchpad(bus, data, &scratchpad);
+
+	#if(TESTS_INCLUDED)
+	#if(TEST_MODE)
+	nrf_gpio_pin_clear(PIN1_14);
+	#else
+	load = cpu_load_get(true);
+	printk("ds18b20_read_scratchpad load: %d \n\r", load);
+	#endif
+	#endif
+
 	if (ret != 0) {
 		return ret;
 	}
@@ -127,6 +205,7 @@ static int ds18b20_write_scratchpad(const struct device *bus,
 	    (scratchpad.config & DS18B20_RESOLUTION_MASK)) {
 		return -EIO;
 	}
+
 
 	return 0;
 }
@@ -140,8 +219,27 @@ int ds18b20_read_scratchpad(const struct device *bus,
 	uint8_t crc;
 
 	memset(scratchpad, 0, sizeof(*scratchpad));
+
+	#if(TESTS_INCLUDED)
+	#if(TEST_MODE)
+	nrf_gpio_pin_set(PIN3_00);
+	#else
+	printk("Inside ds18b20_read_scratchpad()\n\r");
+	(void)cpu_load_get(true);
+	#endif
+	#endif
+
 	ret = w1_write_read(bus, &data->config, &cmd, 1,
 			     (uint8_t *)scratchpad, sizeof(*scratchpad));
+
+	#if(TESTS_INCLUDED)
+	#if(TEST_MODE)
+	nrf_gpio_pin_clear(PIN3_00);
+	#else
+	load = cpu_load_get(true);
+	printk("w1_write_read() in ds18b20_read_scratchpad() load: %d \n\r", load);
+	#endif
+	#endif
 
 	if (ret != 0) {
 		return ret;
@@ -153,6 +251,7 @@ int ds18b20_read_scratchpad(const struct device *bus,
 	}
 
 	crc = w1_crc8((uint8_t *)scratchpad, sizeof(*scratchpad) - 1);
+
 	if (crc != scratchpad->crc) {
 		LOG_WRN("CRC does not match");
 		return -EIO;
@@ -203,22 +302,84 @@ int ds18b20_configure(const struct device *bus,
 {
 	int ret;
 
+	#if(TESTS_INCLUDED)
+	#if(TEST_MODE)
+	nrf_gpio_pin_set(PIN3_06);
+	#else
+	(void)cpu_load_get(true);
+	#endif
+	#endif
+
 	int stat = w1_reset_bus(bus);
+
+	#if(TESTS_INCLUDED)
+	#if(TEST_MODE)
+	nrf_gpio_pin_clear(PIN3_06);
+	#else
+	load = cpu_load_get(true);
+	printk("w1_reset_bus() in ds18b20_configure() load: %d \n\r", load);
+	#endif
+	#endif
+
 	zassert_false(stat <= 0, "No 1-Wire slaves connected\n");
 
 	/* In single-drop configurations the ROM can be read from the device */
 	if (w1_get_slave_count(bus) == 1) {
 		if (w1_rom_to_uint64(&data->config.rom) == 0ULL) {
+			#if(TESTS_INCLUDED)
+			#if(TEST_MODE)
+			nrf_gpio_pin_set(PIN3_10);
+			#else
+			(void)cpu_load_get(true);
+			#endif
+			#endif
+
 			(void)w1_read_rom(bus, &data->config.rom);
+
+			#if(TESTS_INCLUDED)
+			#if(TEST_MODE)
+			nrf_gpio_pin_clear(PIN3_10);
+			#else
+			load = cpu_load_get(true);
+			printk("w1_read_rom in ds18b20_configure() load: %d \n\r", load);
+			#endif
+			#endif
 		}
-	} 
-	zassert_false(CONFIG_COUNT_CONNECTED_DEVICES > 1ULL, 
+	}
+	zassert_false(CONFIG_COUNT_CONNECTED_DEVICES > 1ULL,
 		"ROM required, because multiple slaves are on the bus\n");
 
 	/* write default configuration */
 	if (cfg->chip == type_ds18b20) {
+		#if(TESTS_INCLUDED)
+		#if(!TEST_MODE)
+		(void)cpu_load_get(true);
+		#endif
+		#endif
+
 		ds18b20_set_resolution(data, cfg->resolution);
+
+		#if(TESTS_INCLUDED)
+		#if(TEST_MODE)
+		nrf_gpio_pin_set(PIN3_02);
+		#else
+		load = cpu_load_get(true);
+		printk("ds18b20_set_resolution() load: %d \n\r", load);
+		(void)cpu_load_get(true);
+		#endif
+		#endif
+
 		ret = ds18b20_write_scratchpad(bus, data, data->scratchpad);
+
+		#if(TESTS_INCLUDED)
+		#if(TEST_MODE)
+		nrf_gpio_pin_clear(PIN3_02);
+		#else
+		load = cpu_load_get(true);
+		printk("ds18b20_write_scratchpad() load: %d \n\r", load);
+		#endif
+		#endif
+
 		return ret;
 	}
 

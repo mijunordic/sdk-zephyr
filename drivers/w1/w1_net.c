@@ -16,11 +16,38 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/w1.h>
 
+#include <hal/nrf_gpio.h>
+#include <zephyr/debug/cpu_load.h>
+
+
 LOG_MODULE_REGISTER(w1, CONFIG_W1_LOG_LEVEL);
 
 #define W1_SEARCH_DISCREPANCY_INIT 0
 #define W1_SEARCH_LAST_SLAVE	   65
 #define W1_SEARCH_NO_SLAVE	   66
+
+/*
+ * If TEST_MODE equals 1 it's a time test, if equals 0 tests are turned off
+ */
+
+#define TEST_MODE 1
+
+#if (TEST_MODE)
+#define PIN1_11 NRF_GPIO_PIN_MAP(1, 11)
+#define PIN1_10 NRF_GPIO_PIN_MAP(1, 10)
+#define PIN3_07 NRF_GPIO_PIN_MAP(3, 7)
+#define PIN3_04 NRF_GPIO_PIN_MAP(3, 4)
+#endif
+
+void w1_test_gpio_pins_setup(void)
+{
+#if (TEST_MODE)
+	nrf_gpio_cfg_output(PIN1_11);
+	nrf_gpio_cfg_output(PIN1_10);
+	nrf_gpio_cfg_output(PIN3_07);
+	nrf_gpio_cfg_output(PIN3_04);
+#endif
+}
 
 /* @brief Search bus for next slave.
  *
@@ -216,8 +243,16 @@ int w1_read_rom(const struct device *dev, struct w1_rom *rom)
 	if (ret < 0) {
 		goto out;
 	}
+	#if(TEST_MODE)
+	nrf_gpio_pin_set(PIN3_04);
+	#endif
 
 	ret = w1_write_byte(dev, W1_CMD_READ_ROM);
+
+	#if(TEST_MODE)
+	nrf_gpio_pin_clear(PIN3_04);
+	#endif
+
 	if (ret < 0) {
 		goto out;
 	}
@@ -371,12 +406,30 @@ static int write_read(const struct device *dev, const struct w1_slave_config *co
 {
 	int ret;
 
+	#if(TEST_MODE)
+	nrf_gpio_pin_set(PIN1_11);
+	#endif
+
 	ret = reset_select(dev, config);
+
+	#if(TEST_MODE)
+	nrf_gpio_pin_clear(PIN1_11);
+	#endif
+
 	if (ret != 0) {
 		return ret;
 	}
 
+	#if(TEST_MODE)
+	nrf_gpio_pin_set(PIN1_10);
+	#endif
+
 	ret = w1_write_block(dev, write_buf, write_len);
+
+	#if(TEST_MODE)
+	nrf_gpio_pin_clear(PIN1_10);
+	#endif
+
 	if (ret < 0) {
 		return ret;
 	}
@@ -384,7 +437,18 @@ static int write_read(const struct device *dev, const struct w1_slave_config *co
 	if (read_buf == NULL && read_len > 0) {
 		return -EIO;
 	}
-	return w1_read_block(dev, read_buf, read_len);
+
+	#if(TEST_MODE)
+	nrf_gpio_pin_set(PIN3_07);
+	#endif
+
+	ret = w1_read_block(dev, read_buf, read_len);
+
+	#if(TEST_MODE)
+	nrf_gpio_pin_clear(PIN3_07);
+	#endif
+
+	return ret;
 };
 
 int w1_write_read(const struct device *dev, const struct w1_slave_config *config,
@@ -394,7 +458,10 @@ int w1_write_read(const struct device *dev, const struct w1_slave_config *config
 	int ret;
 
 	(void)w1_lock_bus(dev);
+
 	ret = write_read(dev, config, write_buf, write_len, read_buf, read_len);
+
 	(void)w1_unlock_bus(dev);
+
 	return ret;
 };
