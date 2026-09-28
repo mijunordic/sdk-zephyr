@@ -1,0 +1,24 @@
+/ {
+	w1_uart: w1-gpio {
+		compatible = "zephyr,w1-gpio";
+		gpios = <&gpio1 3 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+		status = "okay";
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ds18b20_a: ds18b20@0 {
+			compatible = "maxim,ds18b20";
+			reg = <0>;
+			resolution = <12>;
+			status = "okay";
+		};
+
+		ds18b20_b: ds18b20@1 {
+			compatible = "maxim,ds18b20";
+			reg = <1>;
+			resolution = <12>;
+			status = "okay";
+		};
+	};
+};
